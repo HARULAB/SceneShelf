@@ -1,0 +1,15 @@
+/build/
+/out/
+/cmake-build-*/
+/.vs/
+/test-host/
+/test-host-dark/
+/test-aviutl2.toml
+/tests/
+*.user
+*.suo
+*.pdb
+*.ilk
+*.obj
+*.exp
+*.lib

@@ -1,0 +1,10 @@
+cmake_minimum_required(VERSION 3.23)
+project(SceneShelf LANGUAGES CXX)
+
+add_library(sceneshelf SHARED src/main.cpp)
+target_compile_features(sceneshelf PRIVATE cxx_std_20)
+target_compile_options(sceneshelf PRIVATE /utf-8)
+target_compile_definitions(sceneshelf PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+target_include_directories(sceneshelf PRIVATE vendor/aviutl2_sdk)
+target_link_libraries(sceneshelf PRIVATE comctl32 uxtheme shell32)
+set_target_properties(sceneshelf PROPERTIES PREFIX "" OUTPUT_NAME "SceneShelf" SUFFIX ".aux2")
