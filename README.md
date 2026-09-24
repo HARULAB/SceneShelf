@@ -23,6 +23,13 @@ AviUtl2 のシーンを、SceneShelf ウィンドウ内の仮想フォルダで�
 
 選択オブジェクトからのシーン作成は、元のオブジェクトを残したままコピーします。最も早い開始位置と最上位レイヤーを新シーンの原点にし、相対位置を維持します。シーン作成とオブジェクト追加は SDK 上で一つの Undo 操作にまとめられず、対応しないエイリアスがあると一部のコピーに失敗する場合があります。
 
+## 使い方
+
+- シーンを探す: 検索欄に名前を入力し、シーンをダブルクリックすると開きます。
+- フォルダに整理する: シーン行をフォルダへドラッグします。ツリー内でドラッグすると並び替えもできます。
+- タイムラインに配置する: シーン行をタイムライン上の置きたい位置へドラッグします。またはシーンを選び「タイムライン追加」を押すと、現在のカーソル位置に追加します。
+- 選択オブジェクトからシーンを作る: タイムラインでオブジェクトを選択し、SceneShelf の「新規シーン」を押します。オブジェクトの右クリックメニューにある「SceneShelf → 選択オブジェクトからシーン作成」からも実行できます。何も選択していない状態で「新規シーン」を押すと空のシーンになります。
+
 ## 必要環境
 
 - Windows x64
@@ -30,7 +37,7 @@ AviUtl2 のシーンを、SceneShelf ウィンドウ内の仮想フォルダで�
 
 ## インストール
 
-1. リリースページから `SceneShelf-v0.1.0.zip` をダウンロードして展開します。
+1. [リリースページ](https://github.com/HARULAB/SceneShelf/releases/latest)から `SceneShelf-v0.2.0.zip` をダウンロードして展開します。
 2. 展開した `SceneShelf.aux2` を AviUtl2 のデータフォルダ内にある `Plugin` フォルダへコピーします。
 3. モジュールの信頼確認が表示された場合は許可し、AviUtl2 を再起動します。
 4. ウィンドウ一覧から **SceneShelf** を開きます。
@@ -74,6 +81,13 @@ Rename, settings, and delete actions are handed to AviUtl2's standard scene-oper
 
 Dragging a scene to the timeline creates a 150-frame scene reference at the drop layer and frame. Creating a scene from selected objects preserves their relative timing and layers and leaves the originals untouched. Scene creation and object insertion cannot be combined into one Undo operation by the SDK; some aliases may fail to recreate.
 
+## Usage
+
+- Search for a scene and double-click it to open it.
+- Drag scenes onto folders to organize them, or within the tree to reorder them.
+- Drag a scene onto the timeline to place it at the drop position. Alternatively, select it and click **Add to Timeline** to insert at the current cursor position.
+- Select timeline objects and click **New Scene** to create a scene containing their copies. The object context menu offers **SceneShelf → 選択オブジェクトからシーン作成** as well. With no selection, **New Scene** creates an empty scene.
+
 ## Requirements
 
 - Windows x64
@@ -81,7 +95,7 @@ Dragging a scene to the timeline creates a 150-frame scene reference at the drop
 
 ## Installation
 
-1. Download and extract `SceneShelf-v0.1.0.zip` from the Releases page.
+1. Download and extract `SceneShelf-v0.2.0.zip` from the [latest release](https://github.com/HARULAB/SceneShelf/releases/latest).
 2. Copy `SceneShelf.aux2` into the `Plugin` folder in AviUtl2's application-data directory.
 3. Trust the module if prompted, then restart AviUtl2.
 4. Open **SceneShelf** from the window list.
