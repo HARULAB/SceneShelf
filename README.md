@@ -8,7 +8,9 @@ AviUtl2 のシーンを、SceneShelf ウィンドウ内の仮想フォルダで�
 - シーンのフォルダ分け、ドラッグ＆ドロップによる並び替え
 - シーン名の検索、ダブルクリックによるシーン切り替え
 - シーンの右クリックメニューから、名前変更・設定・削除
-- 選択したシーンのタイムライン追加、新規シーン作成
+- 選択したシーンのタイムライン追加、タイムラインへのドラッグ配置
+- 「新規シーン」で選択中のオブジェクトだけをコピーしたシーンを作成（未選択なら空のシーン）
+- タイムラインのオブジェクト右クリックから「SceneShelf → 選択オブジェクトからシーン作成」
 - フォルダとシーンをアイコンで区別
 
 ## 大切な仕様
@@ -16,6 +18,10 @@ AviUtl2 のシーンを、SceneShelf ウィンドウ内の仮想フォルダで�
 フォルダは SceneShelf ウィンドウ内だけに存在する仮想フォルダです。AviUtl2 本体のシーン一覧にフォルダを作ったり、シーンそのものを本体の階層間で移動したりはしません。フォルダ分けと並び順はプロジェクトごとの SceneShelf 用データとして保存されます。
 
 シーンの名前変更・設定・削除は、対象シーンを選択したうえで AviUtl2 標準のシーン操作メニューに処理を渡します。SceneShelf 独自の分類情報と、AviUtl2 本体のシーン操作は別々に管理されます。
+
+シーンをタイムラインへドラッグした場合は、ドロップ位置のレイヤー・フレームに 150 フレームのシーン参照を作ります。自分自身のシーンやタイムライン外へのドロップは追加しません。
+
+選択オブジェクトからのシーン作成は、元のオブジェクトを残したままコピーします。最も早い開始位置と最上位レイヤーを新シーンの原点にし、相対位置を維持します。シーン作成とオブジェクト追加は SDK 上で一つの Undo 操作にまとめられず、対応しないエイリアスがあると一部のコピーに失敗する場合があります。
 
 ## 必要環境
 
@@ -56,7 +62,8 @@ SceneShelf organizes AviUtl2 scenes into virtual folders inside its own window.
 - Assign scenes to folders and reorder them with drag and drop.
 - Search scenes by name and switch scenes by double-clicking.
 - Open AviUtl2's standard rename, settings, and delete commands from a scene's context menu.
-- Add the selected scene to the timeline or create a new scene.
+- Add a scene at the timeline cursor or drag it from SceneShelf to a timeline position.
+- Create a scene containing copies of selected objects via the New Scene button or an object context-menu command. With no selection, the button creates an empty scene.
 - Distinguish folders and scenes with icons.
 
 ## Important behavior
@@ -64,6 +71,8 @@ SceneShelf organizes AviUtl2 scenes into virtual folders inside its own window.
 Folders are virtual and exist only in the SceneShelf window. SceneShelf does not create folders in AviUtl2's native scene list or move scenes between native scene hierarchies. Folder assignments and ordering are saved as SceneShelf project data, separately from AviUtl2's native scene operations.
 
 Rename, settings, and delete actions are handed to AviUtl2's standard scene-operation menu with the target scene selected.
+
+Dragging a scene to the timeline creates a 150-frame scene reference at the drop layer and frame. Creating a scene from selected objects preserves their relative timing and layers and leaves the originals untouched. Scene creation and object insertion cannot be combined into one Undo operation by the SDK; some aliases may fail to recreate.
 
 ## Requirements
 

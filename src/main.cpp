@@ -17,6 +17,7 @@ constexpr wchar_t kWindowClass[] = L"HARULAB.SceneLibrary.Window";
 constexpr wchar_t kWindowTitle[] = L"SceneShelf";
 constexpr char kProjectKey[] = "harulab.scene_library.v1";
 constexpr UINT kRefreshMessage = WM_APP + 73;
+constexpr UINT kCreateFromSelectionMessage = WM_APP + 74;
 constexpr COLORREF kBackground = RGB(45, 45, 45);
 constexpr COLORREF kSurface = RGB(37, 37, 37);
 constexpr COLORREF kButton = RGB(72, 72, 72);
@@ -30,6 +31,13 @@ constexpr int kMenuNewFolder = 201, kMenuRenameFolder = 202, kMenuDeleteFolder =
 
 struct Scene { int id; std::wstring name; };
 struct Node { bool folder; int scene_id; std::wstring path; };
+struct ObjectSnapshot { std::string alias; int layer, start, end; };
+struct SelectionSnapshot {
+  EDIT_INFO info{};
+  std::vector<ObjectSnapshot> objects;
+  int expected = 0;
+  bool complete = true;
+};
 struct State {
   HWND window{}, tree{}, search{};
   EDIT_HANDLE* edit{};
@@ -433,27 +441,53 @@ void delete_selected_scene() {
     rebuild_tree();
   }
 }
-void add_scene() {
-  auto* node = selected();
-  if (!node || node->folder) return;
-  EDIT_INFO info{};
+struct AddRequest { int id, layer, frame; bool at_drop, created; };
+void insert_scene_reference(int scene_id, const POINT* screen = nullptr) {
   if (!g.edit) return;
+  EDIT_INFO info{};
   g.edit->get_edit_info(&info, sizeof(info));
-  if (info.scene_id == node->scene_id) return;
-  struct AddRequest { int id; bool created; } request{node->scene_id, false};
+  if (info.scene_id == scene_id) return;
+  AddRequest request{scene_id, 0, 0, screen != nullptr, false};
+  if (screen) { request.layer = screen->x; request.frame = screen->y; }
   g.edit->call_edit_section_param(&request, [](void* raw, EDIT_SECTION* edit) {
     auto& req = *static_cast<AddRequest*>(raw);
+    int layer = edit->info->layer, frame = edit->info->frame;
+    if (req.at_drop && !edit->pos_to_layer_frame(req.layer, req.frame, &layer, &frame)) return;
     std::string alias = "[Object]\n[Object.0]\neffect.name=シーン\nシーン=" + std::to_string(req.id) +
                         "\n[Object.1]\neffect.name=映像再生\n";
-    req.created = edit->create_object_from_alias(alias.c_str(), edit->info->layer,
-                                                  edit->info->frame, 150) != nullptr;
+    req.created = edit->create_object_from_alias(alias.c_str(), layer, frame, 150) != nullptr;
   });
 }
-void create_scene() {
+void add_scene() {
+  auto* node = selected();
+  if (node && !node->folder) insert_scene_reference(node->scene_id);
+}
+bool capture_selection(SelectionSnapshot& snapshot) {
+  if (!g.edit) return false;
+  g.edit->get_edit_info(&snapshot.info, sizeof(snapshot.info));
+  if (snapshot.info.width <= 0 || snapshot.info.height <= 0 ||
+      snapshot.info.rate <= 0 || snapshot.info.scale <= 0) return false;
+  if (!g.edit->call_read_section_param(&snapshot, [](void* raw, EDIT_SECTION* edit) {
+    auto& result = *static_cast<SelectionSnapshot*>(raw);
+    result.expected = edit->get_selected_object_num();
+    for (int i = 0; i < result.expected; ++i) {
+      OBJECT_HANDLE object = edit->get_selected_object(i);
+      if (!object) { result.complete = false; break; }
+      auto location = edit->get_object_layer_frame(object);
+      const char* alias = edit->get_object_alias(object);
+      if (!alias || !*alias || location.end < location.start) { result.complete = false; break; }
+      result.objects.push_back({alias, location.layer, location.start, location.end});
+    }
+  })) return false;
+  return snapshot.complete && static_cast<int>(snapshot.objects.size()) == snapshot.expected;
+}
+void create_scene_from_snapshot(const SelectionSnapshot& snapshot) {
   if (!g.edit) return;
-  EDIT_INFO info{};
-  g.edit->get_edit_info(&info, sizeof(info));
+  const auto& info = snapshot.info;
   if (info.width <= 0 || info.height <= 0 || info.rate <= 0 || info.scale <= 0) return;
+  EDIT_INFO current{};
+  g.edit->get_edit_info(&current, sizeof(current));
+  if (current.scene_id != info.scene_id) return;
   std::wstring folder;
   if (auto* node = selected(); node && node->folder) folder = node->path;
   std::set<int> before;
@@ -463,6 +497,25 @@ void create_scene() {
                             info.rate, info.scale, info.sample_rate, info.background)) {
     return;
   }
+  if (!snapshot.objects.empty()) {
+    struct PasteRequest { const SelectionSnapshot* snapshot; int created; } paste{&snapshot, 0};
+    g.edit->call_edit_section_param(&paste, [](void* raw, EDIT_SECTION* edit) {
+      auto& req = *static_cast<PasteRequest*>(raw);
+      const auto& objects = req.snapshot->objects;
+      const int first_frame = std::min_element(objects.begin(), objects.end(),
+          [](const auto& a, const auto& b) { return a.start < b.start; })->start;
+      const int first_layer = std::min_element(objects.begin(), objects.end(),
+          [](const auto& a, const auto& b) { return a.layer < b.layer; })->layer;
+      for (const auto& object : objects) {
+        if (!edit->create_object_from_alias(object.alias.c_str(), object.layer - first_layer,
+                                             object.start - first_frame, object.end - object.start + 1)) break;
+        ++req.created;
+      }
+    });
+    if (paste.created != static_cast<int>(snapshot.objects.size()))
+      MessageBoxW(g.window, L"一部のオブジェクトを新規シーンへコピーできませんでした。元のオブジェクトは変更していません。",
+                  kWindowTitle, MB_OK | MB_ICONWARNING);
+  }
   refresh_scenes();
   if (!folder.empty()) {
     for (const auto& scene : g.scenes) {
@@ -470,6 +523,18 @@ void create_scene() {
     }
     rebuild_tree();
   }
+}
+void create_scene() {
+  SelectionSnapshot snapshot;
+  if (capture_selection(snapshot)) create_scene_from_snapshot(snapshot);
+  else MessageBoxW(g.window, L"選択オブジェクトの情報を取得できませんでした。シーンは作成していません。",
+                   kWindowTitle, MB_OK | MB_ICONWARNING);
+}
+void create_scene_from_object_menu(void*) {
+  auto snapshot = std::make_unique<SelectionSnapshot>();
+  if (!capture_selection(*snapshot) || snapshot->objects.empty()) return;
+  if (g.window && PostMessageW(g.window, kCreateFromSelectionMessage, 0,
+                               reinterpret_cast<LPARAM>(snapshot.get()))) snapshot.release();
 }
 LRESULT CALLBACK tree_subclass_proc(HWND tree, UINT msg, WPARAM wp, LPARAM lp,
                                     UINT_PTR, DWORD_PTR) {
@@ -565,13 +630,15 @@ LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
       bool after = false;
       HTREEITEM target = drop_target(POINT{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)}, &inside, &after);
       TreeView_SelectDropTarget(g.tree, target);
-      SetCursor(LoadCursorW(nullptr, inside ? IDC_SIZEALL : IDC_NO));
+      SetCursor(LoadCursorW(nullptr, inside ? IDC_SIZEALL : IDC_ARROW));
       return 0;
     }
     break;
   case WM_LBUTTONUP:
     if (g.drag_scene_id >= 0) {
       const int id = g.drag_scene_id;
+      POINT screen{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+      ClientToScreen(hwnd, &screen);
       bool inside = false;
       bool after = false;
       HTREEITEM target = drop_target(POINT{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)}, &inside, &after);
@@ -594,7 +661,7 @@ LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
           place_in_order(id, path, target_node ? target_node->scene_id : -1, after);
         }
         mark_dirty(); rebuild_tree();
-      }
+      } else insert_scene_reference(id, &screen);
       return 0;
     }
     break;
@@ -606,6 +673,11 @@ LRESULT CALLBACK wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     break;
   case WM_TIMER: refresh_scenes(); return 0;
   case kRefreshMessage: rebuild_tree(); return 0;
+  case kCreateFromSelectionMessage: {
+    std::unique_ptr<SelectionSnapshot> snapshot(reinterpret_cast<SelectionSnapshot*>(lp));
+    if (snapshot) create_scene_from_snapshot(*snapshot);
+    return 0;
+  }
   case WM_CONTEXTMENU:
     if (reinterpret_cast<HWND>(wp) == g.tree) {
       POINT screen{GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
@@ -739,4 +811,6 @@ extern "C" __declspec(dllexport) void RegisterPlugin(HOST_APP_TABLE* host) {
   host->register_window_client(kWindowTitle, window);
   host->register_project_load_handler(project_load);
   host->register_project_save_handler(project_save);
+  host->register_object_menu_param(L"SceneShelf\\選択オブジェクトからシーン作成", nullptr,
+                                   create_scene_from_object_menu);
 }
